@@ -26,7 +26,7 @@ t1 = [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23];
 baseload = [92.684 82.153 79.172 73.166 74.093 79.684 109.067 142.416 158.256 156.271 152.508 162.324 152.579 139.126 136.246 142.246 155.712 230.033 216.728 204.236 222.338 186.18 161.535 130.007];
 
 %%
-demandDumb = zeros(EVnumber,size(t1,2)); % For each EV, we generate a dumb charging load profile (time window is 16h-6h)
+demandDumb = zeros(EVnumber,size(t1,2)); % For each EV, we generate a dumb charging load profile
 
 for i=1:EVnumber
     energy = EVs(i,4);
