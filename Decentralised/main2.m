@@ -1,11 +1,13 @@
+clear
+clc
 %%%HOW TO ADD BASELOAD?
 %%%CHARGING EARLIER = BETTER?
 
 Smin = 0.1;
 Smax = 1;
-capBat = 60; % in kWh (Tesla Model Y)
-Emax = 10; % in kW
-cap = 380; % Grid (Line) capacity
+capBat = 70; % in kWh (Tesla Model Y)
+Emax = 15; % in kW
+cap = 200; % Grid (Line) capacity
 
 offPeak = 0.37067; % Prices per kWh
 onPeak = 0.48695;
@@ -15,7 +17,7 @@ EVs = zeros(EVnumber,5);
 for i = 1:EVnumber
     %TODO: Stochastic battery capacity? 
     EVs(i,1) = unifrnd(40,80); % Battery capacity of the car
-    EVs(i,2) = unifrnd(Smin,Smax-0.1); % 1st column: initial SoC
+    EVs(i,2) = unifrnd(Smin,Smax-0.3); % 1st column: initial SoC
     EVs(i,3) = unifrnd(max(EVs(i,2),0.6),Smax); % 2nd column: Sobj
     EVs(i,4) = EVs(i,1)*(EVs(i,3)-EVs(i,2)); % 3rd column: energy to get to Sobj
     EVs(i,5) = max(offPeak,normrnd(.44,0.1)); % price for which EV will defer charging
@@ -38,12 +40,20 @@ end
 beginPlot = min(EVs(:,6));
 t1 = [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23];
 % baseload = [92.684 82.153 79.172 73.166 74.093 79.684 109.067 142.416 158.256 156.271 152.508 162.324 152.579 139.126 136.246 142.246 155.712 230.033 216.728 204.236 222.338 186.18 161.535 130.007];
-rawdata = readmatrix('Data/ThesisData.xlsx');
-fixedLoad5min = sum(rawdata(:,1:10),2);
-fixedLoad = zeros(1,24);
+rawdata = readmatrix('Data/fulldata.xlsx');
+% fixedLoad5min = sum(rawdata(:,1:10),2);
+fixedLoad = zeros(EVnumber,24);
 for i=1:24
-    fixedLoad(i) = sum(fixedLoad5min(1+12*(i-1):12*i));
+    for j=1:EVnumber
+        avg = reshape(rawdata(:,j),288,8); % Reshape vector to get the profile for one day in a column, for eight days. 
+        avg = mean(avg,2); % Take the average of the eigth days. 
+        fixedLoad(j,i) = sum(avg(1+12*(i-1):12*i)); % Rework 5 min resolution to 1 hour resolution.
+    end
 end
+
+
+residentBehaviour = mean(fixedLoad([1 10],:),1); % first and last row correspond to a regular resident
+totalFixed = residentBehaviour*EVnumber;
 
 %% Dumb Charging
 demandDumb = zeros(EVnumber,size(t1,2)); % For each EV, we generate a dumb charging load profile (time window is 16h-6h)
@@ -67,7 +77,24 @@ for i=1:EVnumber
     demandDumb(i,:) = circshift(demandCurr,tarr);
 end
 
-totalDumb = sum(demandDumb, 1) + fixedLoad;
+totalDumb = sum(demandDumb, 1) + totalFixed;
+
+dumbShifted = circshift(totalDumb,-beginPlot);
+% timeShifted = circshift(t1,-beginPlot);
+% timeSeriesDumb = timeseries(dumbShifted, timeShifted);
+xLabels = [beginPlot mod(beginPlot+5,24) mod(beginPlot+10,24) mod(beginPlot+15,24) mod(beginPlot+20,24)];
+figure(1)
+plot(t1,dumbShifted,'-om','MarkerFaceColor','b')
+xticklabels(xLabels)
+title('Dumb charging profile')
+xlabel('Time (h)')
+ylabel('Load (kW)')
+ylim([0 cap+30]);
+hold on 
+ax = gca; 
+ax.FontSize = 12;
+yline(cap, '-r')
+hold off
  
 %% DSO request
 
@@ -80,13 +107,13 @@ congestionHours = find(requestDSO==max(requestDSO));
 
 %%% INITIAL PRICE SETTING
 
-alpha = 0.2; % learning rate 
+alpha = 1; % learning rate 
 % sumEVs = totalDumb;
 % sumEVs(sumEVs<=cap) = 0;
 % sumEVs(congestionHours) = totalDumb(congestionHours);
 
 normcst = 1/max(totalDumb-requestDSO);
-currPrice = ones(1,24);
+currPrice = 10^-7*sum(fixedLoad,1).^3; %Price proportional to fixed load profile
 newPrice = currPrice + alpha*normcst*max(totalDumb-requestDSO,0); 
 epsilon = 0.1;
 forecastedSchedule = zeros(EVnumber,24);
@@ -122,11 +149,28 @@ while norm(newPrice-currPrice) > epsilon
     
     %PRICE SETTING BY THIRD PARTY (DSO/AGGREGATOR)
     total = sum(forecastedSchedule, 1);
-    priceUpdate = max(sum(forecastedSchedule,1)-cap*ones(1,24),0);
+    priceUpdate = max(sum(forecastedSchedule,1)+totalFixed-cap*ones(1,24),0);
     
 
 %     newPrice = currPrice + alpha*normcst*max(sum(forecastedSchedule,1)-requestDSO,0); 
     newPrice = currPrice + alpha*normcst*priceUpdate;
 end
 
+totalGame = sum(forecastedSchedule,1)+totalFixed;
+GameShifted = circshift(totalGame,-beginPlot);
+
+figure(2)
+plot(t1,GameShifted,'-om','MarkerFaceColor','b')
+xticklabels(xLabels)
+% xlim([0 23])
+title('Game Theory charging profile')
+xlabel('Time (h)')
+ylabel('Load (kW)')
+ax = gca; 
+ax.FontSize = 12;
+ylim([0 cap+30]);
+hold on 
+
+yline(cap, '-r')
+hold off
 

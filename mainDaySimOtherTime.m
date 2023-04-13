@@ -70,27 +70,6 @@ baseload = [92.684 82.153 79.172 73.166 74.093 79.684 109.067 142.416 158.256 15
 %% Dumb Charging
 
 demandDumb = zeros(EVnumber,size(t1,2)); % For each EV, we generate a dumb charging load profile (time window is 16h-6h)
-% for i=1:EVnumber
-%     energy = EVs(i,3);
-% %     t = mod(EVs(i,5),24)+1;
-%     t = mod(EVs(i,5),24);
-%     while t ~= mod(EVs(i,5),24)-1
-% %     while t ~= EVs(i,5)
-%         if t == 24
-%             t = 0;
-%         end
-%         if energy > Emax
-%             demandDumb(i,t+1) = Emax;
-%             energy = energy - Emax;
-%         else 
-%             demandDumb(i,t+1) = energy;
-%             break
-%         end
-%         t = t+1;
-%     end
-% end
-% 
-% totalDumb = sum(demandDumb, 1);
 
 for i=1:EVnumber
     energy = EVs(i,3);
